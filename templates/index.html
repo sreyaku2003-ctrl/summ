@@ -1,1 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Document Assistant</title>
 
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- React -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Lucide Icons (UMD) -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+    const API_URL = "http://127.0.0.1:5002";
+
+    function App() {
+      const [file, setFile] = useState(null);
+      const [chapter, setChapter] = useState("");
+      const [wordCount, setWordCount] = useState(300);
+      const [mode, setMode] = useState("both");
+      const [loading, setLoading] = useState(false);
+      const [result, setResult] = useState(null);
+      const [error, setError] = useState("");
+      const [copied, setCopied] = useState({});
+
+      const submit = async () => {
+        if (!file) {
+          setError("Please upload a file");
+          return;
+        }
+
+        setLoading(true);
+        setError("");
+        setResult(null);
+
+        const formData = new FormData();
+        formData.append("file", file);
+        if (chapter) formData.append("chapter", chapter);
+        if (mode !== "notes") formData.append("word_count", wordCount);
+
+        const endpoint =
+          mode === "summary"
+            ? "/summarize"
+            : mode === "notes"
+            ? "/create-notes"
+            : "/summarize-and-notes";
+
+        try {
+          const res = await fetch(API_URL + endpoint, {
+            method: "POST",
+            body: formData,
+            mode: "cors"
+          });
+
+          const data = await res.json();
+          if (data.success) setResult(data);
+          else setError(data.error || "Error occurred");
+        } catch (e) {
+          setError("Backend not reachable on port 5002");
+        } finally {
+          setLoading(false);
+          setTimeout(() => lucide.createIcons(), 0);
+        }
+      };
+
+      const copyText = (text, key) => {
+        navigator.clipboard.writeText(text);
+        setCopied({ ...copied, [key]: true });
+        setTimeout(() => setCopied({ ...copied, [key]: false }), 1500);
+      };
+
+      return (
+        <div className="max-w-6xl mx-auto p-6">
+          <h1 className="text-3xl font-bold mb-6 flex items-center gap-2">
+            <i data-lucide="sparkles"></i> AI Document Assistant
+          </h1>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-white p-6 rounded-xl shadow">
+              <input
+                type="file"
+                accept=".pdf,.docx,.txt"
+                onChange={(e) => setFile(e.target.files[0])}
+                className="mb-4"
+              />
+
+              <input
+                type="text"
+                placeholder="Chapter / Topic (optional)"
+                value={chapter}
+                onChange={(e) => setChapter(e.target.value)}
+                className="w-full border p-2 mb-4 rounded"
+              />
+
+              <div className="flex gap-2 mb-4">
+                {["summary", "notes", "both"].map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`px-3 py-1 rounded ${
+                      mode === m ? "bg-indigo-600 text-white" : "bg-gray-200"
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+
+              {mode !== "notes" && (
+                <>
+                  <label className="text-sm">Words: {wordCount}</label>
+                  <input
+                    type="range"
+                    min="100"
+                    max="1000"
+                    step="50"
+                    value={wordCount}
+                    onChange={(e) => setWordCount(e.target.value)}
+                    className="w-full mb-4"
+                  />
+                </>
+              )}
+
+              {error && (
+                <div className="text-red-600 text-sm mb-2">{error}</div>
+              )}
+
+              <button
+                onClick={submit}
+                disabled={loading}
+                className="bg-indigo-600 text-white px-4 py-2 rounded w-full"
+              >
+                {loading ? "Processing..." : "Generate"}
+              </button>
+            </div>
+
+            <div>
+              {!result && (
+                <div className="bg-white p-10 rounded-xl shadow text-center">
+                  <i data-lucide="file-text" className="mx-auto mb-3"></i>
+                  Upload a document to see results
+                </div>
+              )}
+
+              {result?.summary && (
+                <div className="bg-white p-6 rounded-xl shadow mb-4">
+                  <h3 className="font-bold mb-2 flex items-center gap-2">
+                    <i data-lucide="file-text"></i> Summary
+                  </h3>
+                  <pre className="whitespace-pre-wrap text-sm">{result.summary}</pre>
+                  <button
+                    onClick={() => copyText(result.summary, "summary")}
+                    className="text-sm mt-2 text-indigo-600"
+                  >
+                    {copied.summary ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
+
+              {result?.notes && (
+                <div className="bg-white p-6 rounded-xl shadow">
+                  <h3 className="font-bold mb-2 flex items-center gap-2">
+                    <i data-lucide="book-open"></i> Notes
+                  </h3>
+                  <pre className="whitespace-pre-wrap text-sm">{result.notes}</pre>
+                  <button
+                    onClick={() => copyText(result.notes, "notes")}
+                    className="text-sm mt-2 text-indigo-600"
+                  >
+                    {copied.notes ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+    lucide.createIcons();
+  </script>
+</body>
+</html>
